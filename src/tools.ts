@@ -106,7 +106,7 @@ export function registerTools(server: McpServer, api: ApiClient, apiKey: string)
         destination: url,
         slug: z
           .string()
-          .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{1,63}$/)
+          .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
           .optional(),
         variants: z
           .array(

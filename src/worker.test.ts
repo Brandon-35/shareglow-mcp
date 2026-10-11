@@ -137,3 +137,24 @@ test("without a key, batches and every other method stay 401", async () => {
   });
   expect((await handle(batch, env)).status).toBe(401);
 });
+
+test("create_short_link rejects an uppercase slug like the REST API does", async () => {
+  const fetchImpl: typeof fetch = async () => Response.json({});
+  const res = await handle(
+    rpc("tools/call", {
+      name: "create_short_link",
+      arguments: { destination: "https://example.com", slug: "Promo" },
+    }),
+    env,
+    fetchImpl,
+  );
+  const body = (await res.json()) as { result?: { isError?: boolean } };
+  expect(body.result?.isError).toBe(true);
+});
+
+test("tools/call without a name is -32602 with a short message", async () => {
+  const res = await handle(rpc("tools/call", {}), env);
+  const body = (await res.json()) as { error: { code: number; message: string } };
+  expect(body.error.code).toBe(-32602);
+  expect(body.error.message.length).toBeLessThan(120);
+});

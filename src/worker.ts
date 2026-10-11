@@ -80,7 +80,7 @@ export async function handle(request: Request, env: Env, fetchImpl?: typeof fetc
   const rpcBody = (await request
     .clone()
     .json()
-    .catch(() => null)) as { method?: unknown } | null;
+    .catch(() => null)) as { method?: unknown; id?: unknown; params?: { name?: unknown } } | null;
   const method = typeof rpcBody?.method === "string" ? rpcBody.method : "";
   const apiKey = /^Bearer\s+(sk_live_[A-Za-z0-9]+)$/.exec(request.headers.get("authorization") ?? "")?.[1];
   // Directories (Glama, awesome-remote-mcp-servers CI) handshake without a key. Discovery never calls the API,
@@ -88,6 +88,15 @@ export async function handle(request: Request, env: Env, fetchImpl?: typeof fetc
   if (!apiKey && !PUBLIC_METHODS.has(method) && !method.startsWith("notifications/")) {
     return reply(401, rpcError(-32001, "Send Authorization: Bearer sk_live_..."), {
       "www-authenticate": 'Bearer realm="shareglow"',
+    });
+  }
+
+  // The SDK would surface a missing tool name as -32603 with a raw zod dump.
+  if (method === "tools/call" && typeof rpcBody?.params?.name !== "string") {
+    return reply(200, {
+      jsonrpc: "2.0",
+      id: typeof rpcBody?.id === "string" || typeof rpcBody?.id === "number" ? rpcBody.id : null,
+      error: { code: -32602, message: "Invalid params: tools/call needs a tool name." },
     });
   }
 
