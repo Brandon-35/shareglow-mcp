@@ -34,6 +34,8 @@ async function bodyExceedsCap(request: Request): Promise<boolean> {
   }
 }
 
+const PUBLIC_METHODS = new Set(["initialize", "ping", "tools/list"]);
+
 const rpcError = (code: number, message: string) => ({ jsonrpc: "2.0", error: { code, message }, id: null });
 
 export async function handle(request: Request, env: Env, fetchImpl?: typeof fetch): Promise<Response> {
@@ -72,24 +74,27 @@ export async function handle(request: Request, env: Env, fetchImpl?: typeof fetc
     .filter(Boolean);
   if (origin !== null && !allowed.includes(origin)) return reply(403, rpcError(-32000, "Origin not allowed."));
 
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES || (await bodyExceedsCap(request))) {
+    return reply(413, rpcError(-32700, "Body too large."));
+  }
+  const rpcBody = (await request
+    .clone()
+    .json()
+    .catch(() => null)) as { method?: unknown } | null;
+  const method = typeof rpcBody?.method === "string" ? rpcBody.method : "";
   const apiKey = /^Bearer\s+(sk_live_[A-Za-z0-9]+)$/.exec(request.headers.get("authorization") ?? "")?.[1];
-  if (!apiKey) {
+  // Directories (Glama, awesome-remote-mcp-servers CI) handshake without a key. Discovery never calls the API,
+  // so only tool calls need one.
+  if (!apiKey && !PUBLIC_METHODS.has(method) && !method.startsWith("notifications/")) {
     return reply(401, rpcError(-32001, "Send Authorization: Bearer sk_live_..."), {
       "www-authenticate": 'Bearer realm="shareglow"',
     });
-  }
-  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES || (await bodyExceedsCap(request))) {
-    return reply(413, rpcError(-32700, "Body too large."));
   }
 
   const baseUrl = env.SHAREGLOW_API_URL ?? DEFAULT_API_URL;
   // A well-formed key proves nothing: check it once per session, on initialize. Only a 401 rejects it; a
   // network error or 429 must not lock out a valid key (tool calls surface those themselves).
-  const rpcBody = (await request
-    .clone()
-    .json()
-    .catch(() => null)) as { method?: unknown } | null;
-  if (rpcBody?.method === "initialize") {
+  if (apiKey && method === "initialize") {
     try {
       await createApiClient({ baseUrl, apiKey, fetchImpl }).call("GET", "/v1/templates");
     } catch (err) {
@@ -98,7 +103,7 @@ export async function handle(request: Request, env: Env, fetchImpl?: typeof fetc
       }
     }
   }
-  const server = createMcpServer({ apiKey, baseUrl, fetchImpl });
+  const server = createMcpServer({ apiKey: apiKey ?? "", baseUrl, fetchImpl });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

@@ -22,7 +22,7 @@ test("GET /health answers without auth", async () => {
 });
 
 test("rejects a missing key, a foreign Origin, GET and unknown paths", async () => {
-  const noKey = await handle(rpc("tools/list", {}, { authorization: "" }), env);
+  const noKey = await handle(rpc("tools/call", { name: "list_templates", arguments: {} }, { authorization: "" }), env);
   expect(noKey.status).toBe(401);
   expect(noKey.headers.get("www-authenticate")).toContain("Bearer");
   expect((await handle(rpc("tools/list", {}, { origin: "https://evil.test" }), env)).status).toBe(403);
@@ -102,4 +102,38 @@ test("initialize still works when the API is unreachable", async () => {
     clientInfo: { name: "t", version: "1" },
   });
   expect((await handle(init, env, down)).status).toBe(200);
+});
+test("handshake and tools/list work without a key, tool calls do not", async () => {
+  const calls: string[] = [];
+  const spy: typeof fetch = async (input) => {
+    calls.push(String(input));
+    return Response.json({ templates: [] });
+  };
+  const anon = { authorization: "" };
+  const init = rpc(
+    "initialize",
+    { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "t", version: "1" } },
+    anon,
+  );
+  expect((await handle(init, env, spy)).status).toBe(200);
+  expect((await handle(rpc("notifications/initialized", {}, anon), env, spy)).ok).toBe(true);
+  const list = (await (await handle(rpc("tools/list", {}, anon), env, spy)).json()) as { result: { tools: unknown[] } };
+  expect(list.result.tools).toHaveLength(7);
+  expect((await handle(rpc("tools/call", { name: "list_templates", arguments: {} }, anon), env, spy)).status).toBe(401);
+  expect(calls).toEqual([]);
+});
+test("without a key, batches and every other method stay 401", async () => {
+  const anon = { authorization: "" };
+  for (const m of ["resources/list", "prompts/list", "completion/complete", "nope"]) {
+    expect((await handle(rpc(m, {}, anon), env)).status).toBe(401);
+  }
+  const batch = new Request("https://mcp.test/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify([
+      { jsonrpc: "2.0", id: 1, method: "tools/list" },
+      { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "list_templates", arguments: {} } },
+    ]),
+  });
+  expect((await handle(batch, env)).status).toBe(401);
 });
