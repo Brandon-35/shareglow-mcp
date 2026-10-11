@@ -1,0 +1,10 @@
+# Minimal example for local development: `npm run dev:worker`.
+# For your own deployment add your account/route bindings here (not included).
+name = "shareglow-mcp"
+main = "src/worker.ts"
+compatibility_date = "2026-09-28"
+# nodejs_compat: api.ts uses node:net (isIP) and Buffer.
+compatibility_flags = ["global_fetch_strictly_public", "nodejs_compat"]
+
+[dev]
+port = 8798

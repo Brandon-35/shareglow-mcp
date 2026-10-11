@@ -1,0 +1,42 @@
+{
+  "name": "shareglow-mcp",
+  "version": "0.1.0",
+  "mcpName": "com.getshareglow/mcp",
+  "description": "Shareglow MCP server: scan link previews, generate OG images, short links and stats.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Brandon-35/shareglow-mcp"
+  },
+  "homepage": "https://getshareglow.com",
+  "bin": {
+    "shareglow-mcp": "dist/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "SHAREGLOW_API_URL=${SHAREGLOW_API_URL:-https://app.getshareglow.com} node --watch src/main.ts --http",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev:worker": "wrangler dev"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.149.0"
+  }
+}
